@@ -1,0 +1,112 @@
+.errors-section li {
+    margin-bottom: 5px;
+    color: #721c24;
+}
+
+.timing {
+    margin-top: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.timing p {
+    margin-bottom: 5px;
+    color: #2c3e50;
+}
+
+.btn-crawl {
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-crawl:disabled {
+    background: #95a5a6 !important;
+    cursor: not-allowed;
+}
+
+.btn-crawl.loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #ecf0f1;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 10px 0;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3498db, #2980b9);
+    transition: width 0.3s ease;
+    border-radius: 4px;
+}
+
+.live-log {
+    background: #2c3e50;
+    color: #ecf0f1;
+    padding: 15px;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 15px;
+}
+
+.live-log .log-entry {
+    margin-bottom: 5px;
+    padding: 2px 0;
+}
+
+.live-log .log-entry.success {
+    color: #2ecc71;
+}
+
+.live-log .log-entry.error {
+    color: #e74c3c;
+}
+
+.live-log .log-entry.info {
+    color: #3498db;
+}
+
+.live-log .log-entry.warning {
+    color: #f39c12;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .result-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .filters {
+        flex-direction: column;
+    }
+
+    .notification {
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
+}
