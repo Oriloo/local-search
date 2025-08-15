@@ -8,6 +8,56 @@ class CrawlManager {
         this.init();
     }
 
+    /**
+     * Parse JSON de manière sécurisée avec gestion d'erreur robuste
+     * @param {Response} response - La réponse fetch à parser
+     * @returns {Object} - L'objet JSON parsé ou un objet d'erreur
+     */
+    async safeJsonParse(response) {
+        try {
+            // Vérifier d'abord le content-type
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                console.warn('⚠️ Réponse non-JSON détectée:', contentType);
+                return { 
+                    success: false, 
+                    error: 'Réponse serveur non-JSON', 
+                    isJsonError: true 
+                };
+            }
+
+            // Essayer de parser le JSON
+            const result = await response.json();
+            return result;
+
+        } catch (error) {
+            // Capturer spécifiquement les erreurs de parsing JSON
+            if (error.message.includes('JSON.parse') || 
+                error.message.includes('Unexpected token') ||
+                error.message.includes('unexpected character')) {
+                
+                console.warn('⚠️ Erreur parsing JSON:', error.message);
+                
+                // Essayer de lire le contenu brut pour debug
+                try {
+                    const text = await response.clone().text();
+                    console.warn('📄 Contenu brut reçu:', text.substring(0, 200) + '...');
+                } catch (textError) {
+                    console.warn('🔍 Impossible de lire le contenu brut');
+                }
+
+                return { 
+                    success: false, 
+                    error: 'Erreur parsing JSON - réponse serveur invalide', 
+                    isJsonError: true 
+                };
+            }
+            
+            // Re-lancer les autres types d'erreurs
+            throw error;
+        }
+    }
+
     init() {
         this.bindEvents();
         this.loadCrawlStatus();
@@ -74,8 +124,16 @@ class CrawlManager {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            const result = await response.json();
+            const result = await this.safeJsonParse(response);
             console.log('📋 Résultat:', result);
+
+            // Gestion spéciale des erreurs JSON
+            if (result.isJsonError) {
+                this.showNotification('⚠️ Avertissement JSON: ' + result.error + ' - Le crawling peut continuer', 'warning');
+                console.warn('🔄 Continuer malgré l\'erreur JSON, rechargement du statut...');
+                this.loadCrawlStatus(); // Continuer en rechargeant le statut
+                return; // Sortir sans erreur fatale
+            }
 
             if (result.success) {
                 this.showNotification('✅ Crawling terminé avec succès !', 'success');
@@ -87,7 +145,15 @@ class CrawlManager {
 
         } catch (error) {
             console.error('💥 Erreur crawling:', error);
-            this.showNotification('🔌 Erreur réseau: ' + error.message, 'error');
+            
+            // Différencier les erreurs JSON des erreurs réseau
+            if (error.message && (error.message.includes('JSON.parse') || 
+                                  error.message.includes('Unexpected token') ||
+                                  error.message.includes('unexpected character'))) {
+                this.showNotification('⚠️ Erreur parsing JSON: ' + error.message + ' - Veuillez réessayer', 'warning');
+            } else {
+                this.showNotification('🔌 Erreur réseau: ' + error.message, 'error');
+            }
         } finally {
             // Restaurer le bouton
             btn.textContent = originalText;
@@ -105,14 +171,21 @@ class CrawlManager {
                 return;
             }
 
-            const result = await response.json();
+            const result = await this.safeJsonParse(response);
+
+            // Gestion spéciale des erreurs JSON pour le statut
+            if (result.isJsonError) {
+                console.warn('⚠️ Erreur JSON lors du chargement statut:', result.error);
+                console.log('🔄 Auto-refresh continuera malgré l\'erreur JSON');
+                return; // Continuer l'auto-refresh sans interrompre
+            }
 
             if (result.success && result.data) {
                 this.updateStatusDisplay(result.data);
                 console.log('📊 Statuts mis à jour:', result.data.length, 'sites');
             }
         } catch (error) {
-            console.warn('⚠️ Erreur chargement statut:', error);
+            console.warn('⚠️ Erreur réseau chargement statut:', error);
         }
     }
 
@@ -263,6 +336,8 @@ class CrawlManager {
             notification.style.background = '#27ae60';
         } else if (type === 'error') {
             notification.style.background = '#e74c3c';
+        } else if (type === 'warning') {
+            notification.style.background = '#f39c12';
         } else {
             notification.style.background = '#3498db';
         }
