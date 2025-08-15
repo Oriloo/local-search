@@ -498,6 +498,18 @@ class WebCrawler {
         return $stmt->execute([$project_id, $url, $depth, $parent_url, $priority, $site_id]);
     }
 
+    /**
+     * Récupère la prochaine URL à crawler de la queue
+     * 
+     * @param int $project_id ID du projet
+     * @param int|null $site_id ID du site à prioriser (optionnel)
+     * @return array|false Données de l'URL ou false si aucune URL disponible
+     * 
+     * Comportement:
+     * - Si site_id fourni: priorise les URLs de ce site, fallback vers autres sites
+     * - Utilise la randomisation pour éviter la spécialisation excessive
+     * - Maintient l'ordre de priorité (priority DESC) puis randomise
+     */
     private function getNextFromQueue($project_id, $site_id = null) {
         // Si un site_id est fourni, prioriser les URLs de ce site
         if ($site_id) {
