@@ -461,8 +461,10 @@ class WebCrawler {
     private function parseRobotsTxt($robots_content, $path) {
         $lines = explode("\n", $robots_content);
         $current_user_agent = null;
-        $rules_for_our_agent = [];
-        $rules_for_all = [];
+        $disallow_rules_for_our_agent = [];
+        $allow_rules_for_our_agent = [];
+        $disallow_rules_for_all = [];
+        $allow_rules_for_all = [];
 
         foreach ($lines as $line) {
             $line = trim($line);
@@ -470,35 +472,56 @@ class WebCrawler {
 
             if (preg_match('/^User-agent:\s*(.+)$/i', $line, $matches)) {
                 $agent = trim($matches[1]);
+                // Reset current user agent for each new User-agent directive
+                $current_user_agent = null;
                 if ($agent === '*' || stripos($this->user_agent, $agent) !== false) {
                     $current_user_agent = $agent;
                 }
-            } elseif (preg_match('/^Disallow:\s*(.*)$/i', $line, $matches)) {
+            } elseif (preg_match('/^Disallow:\s*(.*)$/i', $line, $matches) && $current_user_agent) {
                 $disallowed_path = trim($matches[1]);
                 if ($current_user_agent === '*') {
-                    $rules_for_all[] = $disallowed_path;
-                } elseif ($current_user_agent && $current_user_agent !== '*') {
-                    $rules_for_our_agent[] = $disallowed_path;
+                    $disallow_rules_for_all[] = $disallowed_path;
+                } else {
+                    $disallow_rules_for_our_agent[] = $disallowed_path;
+                }
+            } elseif (preg_match('/^Allow:\s*(.*)$/i', $line, $matches) && $current_user_agent) {
+                $allowed_path = trim($matches[1]);
+                if ($current_user_agent === '*') {
+                    $allow_rules_for_all[] = $allowed_path;
+                } else {
+                    $allow_rules_for_our_agent[] = $allowed_path;
                 }
             }
         }
 
         // Utiliser les règles spécifiques à notre agent, sinon les règles générales
-        $rules = !empty($rules_for_our_agent) ? $rules_for_our_agent : $rules_for_all;
+        $disallow_rules = !empty($disallow_rules_for_our_agent) ? $disallow_rules_for_our_agent : $disallow_rules_for_all;
+        $allow_rules = !empty($allow_rules_for_our_agent) ? $allow_rules_for_our_agent : $allow_rules_for_all;
 
-        // Vérifier si le chemin est interdit
-        foreach ($rules as $rule) {
-            if (empty($rule) || $rule === '/') {
-                continue; // Ignorer les règles vides ou qui bloquent tout
+        // Vérifier d'abord les règles Allow (plus spécifiques)
+        foreach ($allow_rules as $rule) {
+            if (!empty($rule) && strpos($path, $rule) === 0) {
+                return true; // Explicitement autorisé
+            }
+        }
+
+        // Puis vérifier les règles Disallow
+        foreach ($disallow_rules as $rule) {
+            // Ne pas ignorer les règles vides - elles ont une signification spéciale
+            if ($rule === '') {
+                continue; // Disallow vide = rien n'est interdit
+            }
+            if ($rule === '/') {
+                return false; // Disallow: / = tout est interdit
             }
             
-            // Simple pattern matching
+            // Pattern matching pour les autres règles
             if (strpos($path, $rule) === 0) {
                 return false; // Chemin interdit
             }
         }
 
-        return true; // Autorisé
+        return true; // Autorisé par défaut
     }
 
     /**
