@@ -6,7 +6,7 @@ class WebCrawler {
     private $db;
     private $user_agent;
     private $max_redirects = 3;
-    private $timeout = 10;
+    private $timeout = 5;
 
     public function __construct() {
         $database = new Database();
@@ -17,7 +17,7 @@ class WebCrawler {
     /**
      * Lance le crawling d'un site spécifique
      */
-    public function crawlSite($site_id, $max_pages = 50) {
+    public function crawlSite($site_id, $max_pages = 200) {
         $site = $this->getSiteInfo($site_id);
         if (!$site) {
             return ['error' => 'Site non trouvé'];

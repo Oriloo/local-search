@@ -5,9 +5,9 @@ if (!defined('ROOT_PATH')) {
 
 define('APP_NAME', 'Moteur de Recherche Local');
 define('BASE_URL', 'http://localhost:8090/local-search/');
-define('MAX_CRAWL_DEPTH', 3);
+define('MAX_CRAWL_DEPTH', 5);
 define('USER_AGENT', 'SearchBot/1.0');
-define('CRAWL_DELAY', 1);
+define('CRAWL_DELAY', 0.1);
 
 define('MAX_CONTENT_LENGTH', 1000000);
 define('MAX_FILE_SIZE', 50000000);

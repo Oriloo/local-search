@@ -317,7 +317,7 @@ $sites = $search_engine->getSites();
 
         <div class="form-group">
             <label for="max_pages">Nombre maximum de pages</label>
-            <input type="number" id="max_pages" class="form-control" value="50" min="1" max="1000">
+            <input type="number" id="max_pages" class="form-control" value="200" min="1" max="2000">
             <small>Limiter le nombre de pages à crawler pour ce lancement</small>
         </div>
 
