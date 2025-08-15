@@ -276,6 +276,7 @@ $sites = $search_engine->getSites();
                 <label>
                     <input type="checkbox" name="respect_robots" checked> Respecter robots.txt
                 </label>
+                <small>Recommandé pour respecter les directives des sites. Décochez pour ignorer robots.txt (moteurs privés)</small>
             </div>
 
             <div class="form-actions">

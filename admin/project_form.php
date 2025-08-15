@@ -129,10 +129,17 @@ if ($_POST) {
             <div class="form-group">
                 <label>
                     <input type="checkbox" name="respect_robots"
-                        <?= $project && json_decode($project['crawl_config'], true)['respect_robots'] ? 'checked' : 'checked' ?>>
+                        <?php
+                        if ($project) {
+                            $config = json_decode($project['crawl_config'], true);
+                            echo isset($config['respect_robots']) && $config['respect_robots'] ? 'checked' : '';
+                        } else {
+                            echo 'checked'; // Default to checked for new projects
+                        }
+                        ?>>
                     Respecter robots.txt
                 </label>
-                <small>Recommandé pour respecter les directives des sites</small>
+                <small>Recommandé pour respecter les directives des sites. Décochez pour ignorer robots.txt (moteurs privés)</small>
             </div>
 
             <div class="form-group">

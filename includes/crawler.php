@@ -121,6 +121,19 @@ class WebCrawler {
                 return ['success' => true, 'message' => 'URL déjà indexée', 'links' => []];
             }
 
+            // Récupérer les informations du site pour vérifier robots.txt
+            $site = $this->getSiteInfo($site_id);
+            if (!$site) {
+                $this->updateQueueStatus($url_data['id'], 'failed', 'Site non trouvé');
+                return ['success' => false, 'error' => 'Site non trouvé'];
+            }
+
+            // Vérifier robots.txt si configuré
+            if (!$this->isAllowedByRobots($url, $site)) {
+                $this->updateQueueStatus($url_data['id'], 'completed');
+                return ['success' => true, 'message' => 'URL bloquée par robots.txt', 'links' => []];
+            }
+
             // Télécharger le contenu
             $content = $this->fetchUrl($url);
             if (!$content['success']) {
@@ -386,6 +399,118 @@ class WebCrawler {
     }
 
     /**
+     * Vérifie si l'URL est autorisée par robots.txt
+     */
+    private function isAllowedByRobots($url, $site) {
+        // Vérifier si on doit respecter robots.txt
+        $crawl_config = json_decode($site['crawl_config'] ?? '{}', true);
+        if (!isset($crawl_config['respect_robots']) || !$crawl_config['respect_robots']) {
+            return true; // Ignorer robots.txt si désactivé
+        }
+
+        $url_parts = parse_url($url);
+        if (!$url_parts || !isset($url_parts['host'])) {
+            return false;
+        }
+
+        $robots_url = $url_parts['scheme'] . '://' . $url_parts['host'] . '/robots.txt';
+        
+        // Récupérer robots.txt depuis la base ou le web
+        if (empty($site['robots_txt'])) {
+            // Télécharger robots.txt
+            $robots_content = $this->fetchRobotsTxt($robots_url);
+            if ($robots_content) {
+                // Sauvegarder dans la base pour la prochaine fois
+                $this->updateSiteRobotsTxt($site['id'], $robots_content);
+                $site['robots_txt'] = $robots_content;
+            }
+        }
+
+        if (empty($site['robots_txt'])) {
+            return true; // Pas de robots.txt trouvé, autoriser
+        }
+
+        // Parser robots.txt
+        return $this->parseRobotsTxt($site['robots_txt'], $url_parts['path'] ?? '/');
+    }
+
+    /**
+     * Télécharge le fichier robots.txt
+     */
+    private function fetchRobotsTxt($robots_url) {
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $robots_url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 5,
+            CURLOPT_USERAGENT => $this->user_agent,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_SSL_VERIFYPEER => false
+        ]);
+
+        $content = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return ($http_code === 200 && $content) ? $content : null;
+    }
+
+    /**
+     * Parse robots.txt pour vérifier si un chemin est autorisé
+     */
+    private function parseRobotsTxt($robots_content, $path) {
+        $lines = explode("\n", $robots_content);
+        $current_user_agent = null;
+        $rules_for_our_agent = [];
+        $rules_for_all = [];
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line) || $line[0] === '#') continue;
+
+            if (preg_match('/^User-agent:\s*(.+)$/i', $line, $matches)) {
+                $agent = trim($matches[1]);
+                if ($agent === '*' || stripos($this->user_agent, $agent) !== false) {
+                    $current_user_agent = $agent;
+                }
+            } elseif (preg_match('/^Disallow:\s*(.*)$/i', $line, $matches)) {
+                $disallowed_path = trim($matches[1]);
+                if ($current_user_agent === '*') {
+                    $rules_for_all[] = $disallowed_path;
+                } elseif ($current_user_agent && $current_user_agent !== '*') {
+                    $rules_for_our_agent[] = $disallowed_path;
+                }
+            }
+        }
+
+        // Utiliser les règles spécifiques à notre agent, sinon les règles générales
+        $rules = !empty($rules_for_our_agent) ? $rules_for_our_agent : $rules_for_all;
+
+        // Vérifier si le chemin est interdit
+        foreach ($rules as $rule) {
+            if (empty($rule) || $rule === '/') {
+                continue; // Ignorer les règles vides ou qui bloquent tout
+            }
+            
+            // Simple pattern matching
+            if (strpos($path, $rule) === 0) {
+                return false; // Chemin interdit
+            }
+        }
+
+        return true; // Autorisé
+    }
+
+    /**
+     * Met à jour le robots.txt d'un site
+     */
+    private function updateSiteRobotsTxt($site_id, $robots_content) {
+        $sql = "UPDATE sites SET robots_txt = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$robots_content, $site_id]);
+    }
+
+    /**
      * Sauvegarde un document en base
      */
     private function saveDocument($project_id, $site_id, $url, $parsed) {
@@ -483,7 +608,7 @@ class WebCrawler {
     // Méthodes utilitaires
 
     private function getSiteInfo($site_id) {
-        $sql = "SELECT s.*, sp.base_domains FROM sites s 
+        $sql = "SELECT s.*, sp.base_domains, sp.crawl_config FROM sites s 
                 JOIN search_projects sp ON s.project_id = sp.id 
                 WHERE s.id = ?";
         $stmt = $this->db->prepare($sql);
