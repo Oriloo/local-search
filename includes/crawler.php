@@ -43,7 +43,7 @@ class WebCrawler {
             // Traiter la queue
             $processed = 0;
             while ($processed < $max_pages) {
-                $url_data = $this->getNextFromQueue($site['project_id']);
+                $url_data = $this->getNextFromQueue($site['project_id'], $site_id);
                 if (!$url_data) {
                     break;
                 }
@@ -498,10 +498,41 @@ class WebCrawler {
         return $stmt->execute([$project_id, $url, $depth, $parent_url, $priority, $site_id]);
     }
 
-    private function getNextFromQueue($project_id) {
+    /**
+     * Récupère la prochaine URL à crawler de la queue
+     * 
+     * @param int $project_id ID du projet
+     * @param int|null $site_id ID du site à prioriser (optionnel)
+     * @return array|false Données de l'URL ou false si aucune URL disponible
+     * 
+     * Comportement:
+     * - Si site_id fourni: priorise les URLs de ce site, fallback vers autres sites
+     * - Utilise la randomisation pour éviter la spécialisation excessive
+     * - Maintient l'ordre de priorité (priority DESC) puis randomise
+     */
+    private function getNextFromQueue($project_id, $site_id = null) {
+        // Si un site_id est fourni, prioriser les URLs de ce site
+        if ($site_id) {
+            // D'abord, essayer de récupérer une URL du site spécifique avec randomisation
+            $sql = "SELECT * FROM crawl_queue 
+                    WHERE project_id = ? AND site_id = ? AND status = 'pending' 
+                    ORDER BY priority DESC, RAND() LIMIT 1";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([$project_id, $site_id]);
+            $result = $stmt->fetch();
+            
+            // Si on trouve une URL pour ce site, la retourner
+            if ($result) {
+                return $result;
+            }
+            
+            // Sinon, fallback vers les autres sites du projet
+        }
+        
+        // Sélection générale avec randomisation (pour le site spécifique sans URLs ou sans site_id)
         $sql = "SELECT * FROM crawl_queue 
                 WHERE project_id = ? AND status = 'pending' 
-                ORDER BY priority DESC, id ASC LIMIT 1";
+                ORDER BY priority DESC, RAND() LIMIT 1";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$project_id]);
         return $stmt->fetch();
